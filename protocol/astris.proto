@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+option go_package = "github.com/thechriswalker/go-astris/protocol";
+
+package astris;
+
+// this is the service that the astris server must expose
+// note that a single server may host more than one election
+// so we should account for that in the spec.
+service AstrisNode {
+
+  // Obtain a list of peers to connect to, of course we
+  // must seed some peers first...
+  rpc GetPeers(ElectionID) returns (stream Peer) {}
+
+  // this is the connection we open to receive blocks
+  // we only have a recieve function. If other peers
+  // want blocks from us, they must call RecieveBlocks
+  // to open the channel
+  // We pass an ElectionId and assume all blocks on the channel
+  // are for the given election. If the server does not support
+  // this election, they SHOULD end the stream immediately
+  rpc RecieveBlocks(ElectionID) returns (stream BlockHeader) {}
+
+  // recieve a specific block from the peer, if they have it
+  // this can be used to populate your chain
+  // this is irrespective of ElectionID as all the blocks are uniquely
+  // addressed.
+  rpc FetchBlock(BlockID) returns (FullBlock) {}
+
+  // get the block the peer considers to be the top of the current confirmed chain
+  // we may have recieved more valid blocks than this, and we maintain a few speculative
+  // chains, but once X peers have confirmed the block it is considered valid and the
+  // longest chain wins.
+  rpc Head(ElectionID) returns (BlockHeader) {}
+}
+
+// this message refers to the ID of a block (its hash)
+message BlockID {
+  // our block hashes are SHA256 which means 32bytes or 4x64bit values.
+  // using the "bytes" value is rubbish as it can be 2^32 long.
+  // there is no fixed length possible. We will have to do the validation
+  // outside the protobuf code.
+  bytes hash = 1;
+}
+
+// this is the block header for a block
+// you can validate the proof of work with just the header
+// but you must validate the payload_hash to confirm the entire
+// block is valid
+message BlockHeader {
+  BlockID id = 1;
+  BlockID prev_id = 2;
+  bytes payload_hash = 3; // this should match the payload
+  fixed32 timestamp = 4; // unix timestamp of block creation
+  fixed32 nonce = 5; // proof of work
+}
+
+// this is the full block that contains all the data
+message FullBlock {
+  BlockHeader header = 1;
+  bytes payload = 2;
+}
+
+
+// represents the ID of an election
+// This will be the hash of the block that confirms all the
+// election setup data. usually an early block.
+message ElectionID {
+  // sane as the blockID we use `bytes`, but really we want `bytes[32]`...
+  bytes id = 1;
+}
+
+
+// this is the address of a peer.
+message Peer {
+  string hostport = 1; // the host:port to connect to
+}
+
+
