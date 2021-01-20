@@ -43,7 +43,7 @@ func (pl *PeerList) GetList() []string {
 
 // Peer represents a Node in our P2P network
 type Peer struct {
-	addr     string
+	host     string
 	lastSeen time.Time // if time.IsZero(peer.lastSeen) then we have never tried this peer
 }
 

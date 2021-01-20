@@ -9,7 +9,7 @@ import (
 	"math"
 )
 
-// Block in the chain
+// Block in the blockchain
 type Block struct {
 	Header  *BlockHeader
 	Payload []byte
@@ -68,6 +68,7 @@ func (bh *BlockHeader) VerifyProofOfWork(n int) bool {
 }
 
 // CalculateProofOfWork tries to calculate a proof of work with the current block
+// if the context if cancelled it will return early.
 // if it cannot it will return false as the bool
 func (bh *BlockHeader) CalculateProofOfWork(ctx context.Context, n int) (nonce uint32, found bool) {
 	h := sha256.New()

@@ -72,7 +72,7 @@ message ElectionID {
 }
 
 
-// this is the address of a peer.
+// this is the address of a peer
 message Peer {
   string hostport = 1; // the host:port to connect to
 }

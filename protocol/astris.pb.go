@@ -267,7 +267,7 @@ func (x *ElectionID) GetId() []byte {
 	return nil
 }
 
-// this is the address of a peer.
+// this is the address of a peer
 type Peer struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
