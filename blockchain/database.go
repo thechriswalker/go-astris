@@ -28,8 +28,9 @@ func NewSQLiteStorage(path string) (*SQLiteStorage, error) {
 		CREATE TABLE IF NOT EXISTS blockchain (
 			id BLOB  NOT NULL PRIMARY KEY,
 			prev_id BLOB NOT NULL,          -- id of the "previous" block
+			next_id BLOB NULL,				-- we write this when we write the "next" block
 			chain_id BLOB NOT NULL,         -- the id of the chain for this block (e.g. election Id)
-			depth INTEGER NOT NULL,         -- how deep into the chain are we. NB this is *not* unique
+			depth INTEGER NOT NULL,         -- how deep into the chain are we
 			epoch_seconds INTEGER NOT NULL, -- unix timestamp in seconds
 			nonce INTEGER NOT NULL,         -- proof of work nonce
 			payload_hash BLOB NOT NULL,
@@ -46,11 +47,12 @@ func NewSQLiteStorage(path string) (*SQLiteStorage, error) {
 	return &SQLiteStorage{db: db}, err
 }
 
-func scanBlock(row *sql.Row, blk *BlockHeader) (int, error) {
+func scanBlock(row *sql.Row, blk *BlockHeader) (int, []byte, error) {
 	if blk == nil {
 		panic("scanBlock recieved nil *BlockHeader")
 	}
 	var depth int
+	var nextID []byte
 	err := row.Scan(
 		&(blk.ID),
 		&(blk.PrevID),
@@ -59,24 +61,25 @@ func scanBlock(row *sql.Row, blk *BlockHeader) (int, error) {
 		&(blk.Nonce),
 		&(blk.PayloadHash),
 		&depth,
+		&nextID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, ErrBlockMissing
+		return 0, nil, ErrBlockMissing
 	}
-	return depth, err
+	return depth, nextID, err
 }
 
 // GetHeader fetches a block by it's hash.
 // find and populate the block, or error
 // validate the hash over this single block
-func (s *SQLiteStorage) GetHeader(hash []byte, blk *BlockHeader) (int, error) {
+func (s *SQLiteStorage) GetHeader(hash []byte, blk *BlockHeader) (int, []byte, error) {
 	stmt, err := s.db.Prepare(`
-		SELECT id, prev_id, chain_id, epoch_seconds, nonce, payload_hash, depth
+		SELECT id, prev_id, chain_id, epoch_seconds, nonce, payload_hash, depth, next_id
 		FROM blocks
 		WHERE id = ?
 	`)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	defer stmt.Close()
 	return scanBlock(stmt.QueryRow(hash), blk)

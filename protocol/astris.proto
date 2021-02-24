@@ -54,6 +54,7 @@ message BlockHeader {
   bytes payload_hash = 3; // this should match the payload
   fixed32 timestamp = 4; // unix timestamp of block creation
   fixed32 nonce = 5; // proof of work
+  fixed64 depth = 6; // block height or chain depth
 }
 
 // this is the full block that contains all the data

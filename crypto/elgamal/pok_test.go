@@ -1,0 +1,26 @@
+package elgamal
+
+import (
+	"math/big"
+	"testing"
+)
+
+func TestProofOfKnowledge(t *testing.T) {
+	eg := dh2048modp256
+	kp := GenerateKeyPair(eg)
+
+	pok := kp.Secret().ProofOfKnowledge()
+
+	if err := kp.Public().VerifyProof(pok); err != nil {
+		t.Logf("ProofOfKnowledge verify fail: %v", err)
+		t.Fail()
+	}
+
+	// screw it up
+	pok.R.Add(pok.R, big.NewInt(1))
+
+	if err := kp.Public().VerifyProof(pok); err == nil {
+		t.Logf("ProofOfKnowledge verify passeed incorrectly Response tampered")
+		t.Fail()
+	}
+}

@@ -23,8 +23,10 @@ type BlockHeader struct {
 	PrevID       []byte
 	ChainID      []byte
 	EpochSeconds uint64
-	Nonce        uint32
 	PayloadHash  []byte
+	// these 2 fields are not computed in the hash
+	Nonce uint32
+	Depth int
 }
 
 // Validate a BlockHeader, assuming the PrevId and PayloadHash are good.
