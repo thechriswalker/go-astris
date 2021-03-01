@@ -196,11 +196,15 @@ func (sk *SecretKey) UnmarshalJSON(b []byte) error {
 
 /////////////////// type CipherText ///////////////////
 
-func (ct *CipherText) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+func (ct *CipherText) toJSON() map[string]interface{} {
+	return map[string]interface{}{
 		"a": toJSON(ct.A),
 		"b": toJSON(ct.B),
-	})
+	}
+}
+
+func (ct *CipherText) MarshalJSON() ([]byte, error) {
+	return json.Marshal(ct.toJSON())
 }
 
 func (ct *CipherText) UnmarshalJSON(b []byte) error {

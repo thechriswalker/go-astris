@@ -54,20 +54,20 @@ func DeriveKeys(system *System, secret *big.Int) (dk *DerivedKeys) {
 	} else {
 		dk.secret = new(big.Int).Set(secret)
 	}
-	dk.Sig = deriveKey(system, dk.secret, new(big.Int).SetInt64(0))
-	dk.Enc = deriveKey(system, dk.secret, new(big.Int).SetInt64(1))
+	dk.Sig = deriveKey(system, dk.secret, []byte("sig"))
+	dk.Enc = deriveKey(system, dk.secret, []byte("enc"))
 	return
 }
 
-func deriveKey(sys *System, secret *big.Int, i *big.Int) *KeyPair {
+func deriveKey(sys *System, secret *big.Int, kind []byte) *KeyPair {
 	// We use our random Oracle and we feed it some of the system params
 	// and our secret int and the I value.
 	b := []byte("dk|")
-	b = append(b, sys.P.Bytes()...)
+	b = append(b, sys.P.Text(16)...)
 	b = append(b, '|')
-	b = append(b, secret.Bytes()...)
+	b = append(b, secret.Text(16)...)
 	b = append(b, '|')
-	b = append(b, i.Bytes()...)
+	b = append(b, kind...)
 
 	return keypairForSecret(sys, random.Oracle(b, sys.Q))
 }

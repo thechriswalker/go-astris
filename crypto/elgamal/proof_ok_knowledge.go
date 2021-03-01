@@ -11,13 +11,17 @@ import (
 // the secret key paired with a public key. We must have the public key
 // to Verify
 type ProofOfKnowledge struct {
-	Cm, Ch, R *big.Int `json:",string"`
+	Cm, Ch, R *big.Int
 }
 
 // on system to allow it to be used by both private and public keys
 func (s *System) createPoKChallenge(x *big.Int) *big.Int {
-	b := []byte("PoK:")
-	b = append(b, x.Bytes()...)
+	b := []byte("pok|")
+	// technically this doesn't need the params in here,
+	// as it will not verify with a bogus system anyway
+	b = append(b, s.P.Text(16)...)
+	b = append(b, '|')
+	b = append(b, x.Text(16)...)
 	return random.Oracle(b, s.Q)
 }
 

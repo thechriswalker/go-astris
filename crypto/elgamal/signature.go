@@ -16,7 +16,9 @@ type Signature struct {
 func (s *System) createSigningChallenge(a *big.Int, msg []byte) *big.Int {
 	// we concat a fixed prefix, the randomness and the message
 	commit := []byte("sig|")
-	commit = append(commit, a.Bytes()...)
+	commit = append(commit, s.P.Text(16)...)
+	commit = append(commit, '|')
+	commit = append(commit, a.Text(16)...)
 	commit = append(commit, '|')
 	commit = append(commit, msg...)
 	// then hash and return the big.Int

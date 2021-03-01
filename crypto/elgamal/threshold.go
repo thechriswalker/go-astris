@@ -1,6 +1,10 @@
 package elgamal
 
-import "math/big"
+import (
+	"math/big"
+
+	"github.com/thechriswalker/go-astris/crypto/random"
+)
 
 // The threshold encryption scheme
 //
@@ -114,4 +118,25 @@ func (p *SecretParticipant) PartialDecrypt(params *System, participants ...[]*Pu
 	// }
 	// return &dec
 	return nil
+}
+
+func deriveCoefficients(params *System, secret *big.Int, t int) []*big.Int {
+	// t is the number of coefficients we want.
+	// secret is our random secret that gives our deterministic "random"
+	// coefficients and keys.
+	// OK so we just want the coefficients.
+	coefficients := make([]*big.Int, t+1) // t+1 coefficients i.e. c0 + c1*x + c2 * x^2 ... + ct * x^t
+
+	for i := range coefficients {
+		b := []byte("coef|")
+		b = append(b, params.P.Text(16)...)
+		b = append(b, '|')
+		b = append(b, big.NewInt(int64(t)).Text(16)...)
+		b = append(b, '|')
+		b = append(b, secret.Text(16)...)
+		b = append(b, '|')
+		b = append(b, big.NewInt(int64(i)).Text(16)...)
+		coefficients[i] = random.Oracle(b, params.Q)
+	}
+	return coefficients
 }
