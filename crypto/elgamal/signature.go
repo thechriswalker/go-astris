@@ -1,6 +1,7 @@
 package elgamal
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 
@@ -15,15 +16,11 @@ type Signature struct {
 // defined on System so it is present on public and private keys
 func (s *System) createSigningChallenge(a *big.Int, msg []byte) *big.Int {
 	// we concat a fixed prefix, the randomness and the message
-	commit := []byte("sig|")
-	commit = append(commit, s.P.Text(16)...)
-	commit = append(commit, '|')
-	commit = append(commit, a.Text(16)...)
-	commit = append(commit, '|')
-	commit = append(commit, msg...)
+	commit := &bytes.Buffer{}
+	fmt.Fprintf(commit, "sig|%s|%s|", s.P.Text(16), a.Text(16))
+	commit.Write(msg)
 	// then hash and return the big.Int
-	//fmt.Println("Commitment: ", string(commit))
-	return random.Oracle(commit, s.Q)
+	return random.Oracle(commit.Bytes(), s.Q)
 }
 
 // CreateSignature signs the given message with this key using Schnorr
@@ -38,6 +35,21 @@ func (sk *SecretKey) CreateSignature(msg []byte) (sig *Signature) {
 	sig.R.Sub(w, sig.R)
 	sig.R.Mod(sig.R, sk.Q)
 	return
+}
+
+// Signable interface represents an object that can be signed
+type Signable interface {
+	SignatureMessage() []byte
+}
+
+// Sign a signable object
+func (sk *SecretKey) Sign(v Signable) *Signature {
+	return sk.CreateSignature(v.SignatureMessage())
+}
+
+// Verify a signable object
+func (sk *SecretKey) Verify(v Signable, s *Signature) error {
+	return sk.VerifySignature(s, v.SignatureMessage())
 }
 
 // VerifySignature verifies a signature on a message

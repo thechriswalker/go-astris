@@ -56,6 +56,20 @@ func main() {
 	var webAddr string
 	var peerAddr string
 
+	// commands:
+	//
+	// - authority: setup an election, accept trustee and registrar data create genesis block
+	// - trustee: help setup the election, create key shards, setup phases, final tally partial decryption
+	// - registrar: help setup the election, run authentication server for voters, voter lists
+	// - voter: register to vote, create keys, create votes
+	//
+	// - node: run the chain p2p node, accepting blocks and validating them. This process
+	//			also becomes an "auditor" role, as once the whole chain is present (or downloaded separately)
+	//       	this process will validate the chain, producing a result (if there is enough chain)
+	//
+	// - auditor: like the node (probably a sub-command, or vice-versa), but only attempts to download the full chain and validate it and give
+	//			progress (like, how far through the election we are) or show errors.
+
 	// This is the sub command to run the p2p node
 	var nodeCmd = &cobra.Command{
 		Use:   "server",
@@ -63,13 +77,6 @@ func main() {
 		Long: `Start a P2P Node, for each election we care about
 attempt to get the longest chain and then continue to participate
 in the network, accepting and validating blocks.
-
-This mode also starts a web-interface to allow:
-
-- new election creation
-- voting for eligible voters
-- status reporting of the server and the election progress
-- combining results into a final tally and the iterative partial tally decryption
 `,
 		Args: cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
