@@ -1,9 +1,11 @@
 package elgamal
 
 import (
+	"bytes"
+	"fmt"
 	"math/big"
 
-	"../random"
+	"github.com/thechriswalker/go-astris/crypto/random"
 )
 
 // DerivedKeys are deterministically derived keys from
@@ -54,20 +56,15 @@ func DeriveKeys(system *System, secret *big.Int) (dk *DerivedKeys) {
 	} else {
 		dk.secret = new(big.Int).Set(secret)
 	}
-	dk.Sig = deriveKey(system, dk.secret, []byte("sig"))
-	dk.Enc = deriveKey(system, dk.secret, []byte("enc"))
+	dk.Sig = deriveKey(system, dk.secret, "sig")
+	dk.Enc = deriveKey(system, dk.secret, "enc")
 	return
 }
 
-func deriveKey(sys *System, secret *big.Int, kind []byte) *KeyPair {
+func deriveKey(sys *System, secret *big.Int, kind string) *KeyPair {
 	// We use our random Oracle and we feed it some of the system params
 	// and our secret int and the I value.
-	b := []byte("dk|")
-	b = append(b, sys.P.Text(16)...)
-	b = append(b, '|')
-	b = append(b, secret.Text(16)...)
-	b = append(b, '|')
-	b = append(b, kind...)
-
-	return keypairForSecret(sys, random.Oracle(b, sys.Q))
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "dk|%s|%s|%s", sys.P.Text(16), secret.Text(16), kind)
+	return keypairForSecret(sys, random.Oracle(b.Bytes(), sys.Q))
 }

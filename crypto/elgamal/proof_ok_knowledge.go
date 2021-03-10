@@ -1,10 +1,11 @@
 package elgamal
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 
-	"../random"
+	"github.com/thechriswalker/go-astris/crypto/random"
 )
 
 // ProofOfKnowledge is a NonInteractive ZKP that the prover knows
@@ -16,13 +17,11 @@ type ProofOfKnowledge struct {
 
 // on system to allow it to be used by both private and public keys
 func (s *System) createPoKChallenge(x *big.Int) *big.Int {
-	b := []byte("pok|")
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "pok|%s|%s", s.P.Text(16), x.Text(16))
 	// technically this doesn't need the params in here,
 	// as it will not verify with a bogus system anyway
-	b = append(b, s.P.Text(16)...)
-	b = append(b, '|')
-	b = append(b, x.Text(16)...)
-	return random.Oracle(b, s.Q)
+	return random.Oracle(b.Bytes(), s.Q)
 }
 
 // ProofOfKnowledge generates a ZKP of knowledge of the secret key

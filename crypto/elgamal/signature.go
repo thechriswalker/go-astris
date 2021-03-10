@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"../random"
+	"github.com/thechriswalker/go-astris/crypto/random"
 )
 
 // Signature is a Schnorr signature over an arbitrary message
@@ -16,8 +16,8 @@ type Signature struct {
 // defined on System so it is present on public and private keys
 func (s *System) createSigningChallenge(a *big.Int, msg []byte) *big.Int {
 	// we concat a fixed prefix, the randomness and the message
-	commit := &bytes.Buffer{}
-	fmt.Fprintf(commit, "sig|%s|%s|", s.P.Text(16), a.Text(16))
+	var commit bytes.Buffer
+	fmt.Fprintf(&commit, "sig|%s|%s|", s.P.Text(16), a.Text(16))
 	commit.Write(msg)
 	// then hash and return the big.Int
 	return random.Oracle(commit.Bytes(), s.Q)

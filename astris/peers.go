@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"../blockchain"
+	"github.com/thechriswalker/go-astris/crypto/blockchain"
 )
 
 // PeerConnection represents a Node in our P2P network

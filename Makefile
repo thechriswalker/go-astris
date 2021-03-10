@@ -6,7 +6,7 @@ LDFLAGS := "-X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDat
 BUILD_DIR=build
 
 # go does a pretty good job of managing it's iterative builds
-$(BUILD_DIR)/astris: protocol/astris_grpc.pb.go main.go astris/*.go blockchain/*.go
+$(BUILD_DIR)/astris: protocol/astris_grpc.pb.go main.go astris/*.go blockchain/*.go cmds/*/*.go crypto/*/*.go
 	@echo ">>> Building Go source..."
 	go build -o $(BUILD_DIR)/astris -ldflags $(LDFLAGS) main.go
 

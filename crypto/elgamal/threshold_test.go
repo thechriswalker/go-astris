@@ -106,8 +106,8 @@ func TestThreshold(t *testing.T) {
 
 	// Authority generates public data
 	election := &publicKnowledge{
-		Params: dh2048modp256, //dh1024modp160,
-		T:      2,             // t+1 trustees required to reconstruct
+		Params: DH2048modp256(),
+		T:      2, // t+1 trustees required to reconstruct
 		L:      5,
 		Phase1: map[int]*phase1Data{},
 		Phase2: map[int]*phase2Data{},

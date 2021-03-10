@@ -52,8 +52,7 @@ import (
 // - ElGamal encryption with a public key.
 
 // ThresholdSystem is the distributed decryption, public encryption scheme
-// with L-T participants required to decrypt.
-// I believe there is a requirement for L-T
+// with T+1 participants required to decrypt.
 type ThresholdSystem struct {
 	*System
 	T int // T+1 participants required to decrypt
@@ -225,7 +224,7 @@ func (sp *SecretParticipant) Phase3() *PublicParticipantPhase3 {
 
 // mod-inverse of all the factors except the current index
 func lagrange(indices []int, index int, modulus *big.Int) (r *big.Int) {
-	r = new(big.Int).Set(one)
+	r = new(big.Int).Set(bigOne)
 	var inv, idx big.Int
 	for _, i := range indices {
 		if i != index {

@@ -27,8 +27,8 @@ func Oracle(input []byte, max *big.Int) *big.Int {
 
 func SafePrimes(bits int) (*big.Int, *big.Int) {
 	one, two := big.NewInt(1), big.NewInt(2)
-	var q big.Int
-	var p *big.Int
+
+	var q, p *big.Int
 	var err error
 	for {
 		p, err = rand.Prime(rand.Reader, bits)
@@ -37,12 +37,11 @@ func SafePrimes(bits int) (*big.Int, *big.Int) {
 			panic(err)
 		}
 		// check is q = (p-1)/2 is prime
-		q.Set(p)
-		q.Sub(&q, one)
-		q.Div(&q, two)
+		q.Sub(p, one)
+		q.Div(q, two)
 		// we use 20 as that is what rand.Prime uses
 		if q.ProbablyPrime(20) {
-			return p, &q
+			return p, q
 		}
 	}
 }

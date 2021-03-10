@@ -8,7 +8,7 @@ import (
 )
 
 func TestEncryption(t *testing.T) {
-	eg := dh2048modp256
+	eg := DH2048modp256()
 	kp := GenerateKeyPair(eg)
 	m := random.Int(eg.Q)
 	ct := kp.Public().Encrypt(m, nil)
@@ -20,7 +20,7 @@ func TestEncryption(t *testing.T) {
 }
 
 func TestHomomorphism(t *testing.T) {
-	eg := dh2048modp256
+	eg := DH2048modp256()
 
 	kp := GenerateKeyPair(eg)
 

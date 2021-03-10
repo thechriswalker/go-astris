@@ -6,7 +6,7 @@ import (
 )
 
 func TestProofOfKnowledge(t *testing.T) {
-	eg := dh2048modp256
+	eg := DH2048modp256()
 	kp := GenerateKeyPair(eg)
 
 	pok := kp.Secret().ProofOfKnowledge()
