@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+option go_package = "github.com/thechriswalker/go-astris/protocol";
+
+package astris;
+
+// this is the service that the astris server must expose
+// note that a single server _may_ host more than one election
+// so we should account for that in the spec.
+service AstrisV1 {
+  // this is for announcing and managing peers.
+  rpc PeerExchange(Peer) returns (stream Peer) {}
+
+  // this is the connection we open to receive blocks
+  // we only have a receive function. If other peers
+  // want blocks from us, they must call RecieveBlocks
+  // to open the channel
+  // the client should immediately send it's current "HEAD"
+  // block header, from which the client can decide whether
+  // to ask for more blocks, or ignore this peer
+  rpc RecvBlocks(Empty) returns (stream BlockHeader) {}
+
+  // recieve a specific block from the peer, if they have it
+  // this can be used to populate your chain
+  // addressed.
+  rpc GetBlock(BlockID) returns (FullBlock) {}
+
+  // this can be used to fetch a stream of blocks starting at the given one
+  // if the peer doesn't recognise the starting block, it should bail.
+  // if the client doesn't recieve a valid ordered sequence of blocks,
+  // it should bail. This is used to "fast-forward" a client.
+  rpc FromBlock(BlockID) returns (stream FullBlock) {}
+
+  // This method is used to find the largest depth common block
+  // between two divergent chains
+  rpc AtDepth(Depth) returns (BlockID) {}
+
+  // Publish a block onto the chain, to allow us to "push" blocks to a node we have connected to
+  // If they have connected to us, we can just use their RecvBlocks to deliver. This is designed
+  // for the clients that wish to connect and publish rather than participate in the full mesh
+  rpc PublishBlock(FullBlock) returns (Acceptance) {}
+}
+
+// Empty message has no data
+message Empty {}
+
+// A connectible peer address
+message Peer {
+  string target = 1;
+}
+
+// The depth we wish to query
+message Depth {
+  fixed64 depth = 1;
+}
+
+message Acceptance {
+  bool accepted = 1;
+}
+
+// this message refers to the ID of a block (its hash)
+message BlockID {
+  // our block hashes are SHA256 which means 32bytes or 4x64bit values.
+  // using the "bytes" value is rubbish as it can be 2^32 long.
+  // there is no fixed length possible. We will have to do the validation
+  // outside the protobuf code.
+  // fortunately the GRPC code has a MaxMessageSize so we can limit the damage.
+  bytes id = 1;
+}
+
+// this is the block header for a block
+// you can validate the proof of work with just the header
+// but you must validate the payload_hash to confirm the entire
+// block is valid
+message BlockHeader {
+  bytes    prev_id = 1;
+  bytes    payload_hash = 2; // this should match the payload
+  fixed32  timestamp = 3; // unix timestamp of block creation
+  fixed32  proof = 4; // proof of work
+  uint64   depth = 5; // block height or chain depth
+  uint32   kind = 6;
+}
+
+// this is the full block that contains all the data
+message FullBlock {
+  BlockHeader header = 1;
+  bytes       payload = 2;
+}

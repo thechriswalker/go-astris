@@ -1,0 +1,39 @@
+//+build ignore
+
+package main
+
+import (
+	"fmt"
+	big "github.com/ncw/gmp"
+	"os"
+	"time"
+
+	"github.com/thechriswalker/go-astris/crypto/elgamal"
+)
+
+func main() {
+	fmt.Println("Generating a safe 2048-bit ElGamal System with subgroup. This could take some time...")
+	fmt.Println("> 20mins on an Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz")
+	fmt.Println("Started at", time.Now().Format("15:04"))
+	eg := elgamal.New(2048)
+	// now print it in a pretty way.
+	os.Stdout.WriteString("\n>> P\n")
+	printInt(eg.P)
+	os.Stdout.WriteString("\n>> G\n")
+	printInt(eg.G)
+	os.Stdout.WriteString("\n>> Q\n")
+	printInt(eg.Q)
+}
+
+func printInt(b *big.Int) {
+	s := b.Bytes()
+	for i := 0; i < len(s)/4; i++ {
+		n := s[i*4 : (i+1)*4]
+		if i%6 == 5 {
+			fmt.Printf("%X\n", n)
+		} else {
+			fmt.Printf("%X ", n)
+		}
+	}
+	fmt.Print("\n")
+}
