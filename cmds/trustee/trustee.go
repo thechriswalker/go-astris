@@ -26,8 +26,8 @@ func Register(rootCmd *cobra.Command) {
 	var electionIdStr string
 
 	var tallyCmd = &cobra.Command{
-		Use:   "simulate-tally",
-		Short: "Partial Decrypt a tally",
+		Use:   "simulate",
+		Short: "Partial Decrypt a tally for the simulation",
 		Run: func(cmd *cobra.Command, args []string) {
 			// add up, decrypt.
 			log.Info().Msg("Starting Voter Simulation")
@@ -39,15 +39,13 @@ func Register(rootCmd *cobra.Command) {
 			}
 
 			validator := astris.NewElectionValidator(electionId)
+			// speed this up for the simulation
+			validator.LooseMode = true
 			chain, err := blockchain.Open(dataDir, electionId, astris.AstrisWorkLevel, validator)
-
-			// we should have the genesis block, so we can get the params.
-			//system := validator.System()
 
 			// load all the trustee data.
 			trustees := loadTrustees(dataDir, validator)
 
-			//@todo update to time of tallying
 			var timestamp uint32 = 1617490801
 
 			encTally := validator.GetLocalTally()

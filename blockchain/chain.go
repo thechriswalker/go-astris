@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/cheggaaa/pb/v3"
 	"github.com/rs/zerolog/log"
 )
 
@@ -280,11 +281,16 @@ func openChain(db *SQLiteStorage, chainId BlockID, initialWorkLevel int, validat
 	start := time.Now()
 	header := &BlockHeader{}
 	lastDepth := uint64(0)
+	fullDepth := -1
 	for {
 		// lookup block header
 		_, err = db.Header(curr.blockId, header)
 		if err != nil {
 			return nil, fmt.Errorf("Chain invalid [block=%s] error reading block header: %w", curr.blockId, err)
+		}
+		// if fullDepth is -1 then this is the first block.
+		if fullDepth == -1 {
+			fullDepth = int(header.Depth)
 		}
 		// we found the header, is the header valid?
 		if lastDepth != 0 && header.Depth != lastDepth-1 {
@@ -311,8 +317,9 @@ func openChain(db *SQLiteStorage, chainId BlockID, initialWorkLevel int, validat
 		curr = prev
 	}
 	pass1 := time.Now()
-	log.Debug().Dur("pass1_ms", pass1.Sub(start)).Msg("Chain reverse pass complete, starting forward validation")
-
+	log.Info().Dur("pass1_ms", pass1.Sub(start)).Msg("Chain reverse pass complete, starting forward validation")
+	bar := MaybeProgress(fullDepth)
+	bar.Start()
 	// if we get this far the chain of headers is valid and complete.
 	// now we need to reverse back up the chain validating payloads.
 	blk := &Block{Header: &BlockHeader{}}
@@ -340,10 +347,12 @@ func openChain(db *SQLiteStorage, chainId BlockID, initialWorkLevel int, validat
 		}
 		// move on one
 		curr = curr.next
+		bar.Increment()
 	}
 	pass2 := time.Now()
 	totalms := pass2.Sub(start)
-	log.Debug().
+	bar.Finish()
+	log.Info().
 		Dur("total_ms", totalms).
 		Dur("pass2_ms", pass2.Sub(pass1)).
 		Msg("Chain forward pass complete")
@@ -364,4 +373,34 @@ func openChain(db *SQLiteStorage, chainId BlockID, initialWorkLevel int, validat
 		depth:     blk.Header.Depth,
 	}, nil
 
+}
+
+type maybeProgress struct {
+	bar *pb.ProgressBar
+}
+
+func MaybeProgress(n int) *maybeProgress {
+	mp := &maybeProgress{}
+	if n > 1000 {
+		mp.bar = pb.ProgressBarTemplate(`{{string . "prefix"}}{{counters . }} {{bar . }} {{percent . }} {{speed . }} {{etime . }`).New(n)
+		mp.bar.SetRefreshRate(time.Second)
+	}
+	return mp
+}
+
+func (mp *maybeProgress) Start() {
+	if mp.bar != nil {
+		mp.bar.Start()
+	}
+}
+func (mp *maybeProgress) Increment() {
+	if mp.bar != nil {
+		mp.bar.Increment()
+	}
+}
+
+func (mp *maybeProgress) Finish() {
+	if mp.bar != nil {
+		mp.bar.Finish()
+	}
 }
