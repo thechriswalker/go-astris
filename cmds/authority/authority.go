@@ -11,6 +11,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	big "github.com/ncw/gmp"
 
@@ -270,6 +271,8 @@ func Register(rootCmd *cobra.Command) {
 	authorityCmd.AddCommand(interactiveCmd)
 
 	var dataDir string
+	var numTrustees int
+	var trusteesRequired int
 
 	var simulateCmd = &cobra.Command{
 		Use:   "simulate",
@@ -281,39 +284,73 @@ func Register(rootCmd *cobra.Command) {
 			os.RemoveAll(dataDir)
 			os.MkdirAll(dataDir, 0777)
 
-			numTrustees := 5
-			trusteesRequired := 3
+			// timings here are big enough to allow 1 million voters
+			// enough time to register 1 per second. that is enough for our
+			// simulations.
+
+			// might as well start now.
+			// params, one hour is enough
+			pStart := time.Now().Truncate(time.Second)
+			pEnd := pStart.Add(time.Hour)
+			// reg
+			vStart := pEnd.Add(time.Second)
+			vEnd := vStart.Add(300 * time.Hour) // 300 hours > 1_000_000 seconds
+			// casting
+			cStart := vEnd.Add(time.Second)
+			cEnd := cStart.Add(300 * time.Hour)
+			// tally
+			tStart := cEnd.Add(time.Second)
+			tEnd := tStart.Add(time.Hour)
+
+			toTimeSpec := func(t time.Time) astris.TimeSpec {
+				return astris.TimeSpec(t.Format(astris.TimeSpecFormat))
+			}
+
 			system := &elgamal.ThresholdSystem{
-				System: elgamal.DH2048modp224(), //.Astris2048(),
+				// use the DH2048modp256 params
+				System: elgamal.DH2048modp256(), //.Astris2048(),
 				T:      trusteesRequired - 1,
 				L:      numTrustees,
 			}
 
 			setup := &astris.PayloadElectionSetup{
-				Version:          astris.AstrisProtocolVersion,
-				Name:             "Simulated Election",
+				Version: astris.AstrisProtocolVersion,
+				Name:    "Simulated Election",
+				// keep this LOW
 				Difficulty:       1,
 				Params:           system.System,
 				TrusteesRequired: trusteesRequired,
 				MaxChoices:       1,
-				Candidates:       []string{"C1", "C2", "C3", "C4", "C5"},
+				// 10 candidates
+				Candidates: []string{
+					"Alice",
+					"Bob",
+					"Charlie",
+					"David",
+					"Eve",
+					"Francis",
+					"George",
+					"Hattie",
+					"Ivan",
+					"Jules",
+				},
 				Timing: &astris.TimingInfo{
 					Timezone: "Europe/London",
 					ParameterConfirmation: &astris.TimeBounds{
-						Opens:  "2021-04-01T00:00:00", // 1617231600
-						Closes: "2021-04-01T23:59:59",
+						Opens:  toTimeSpec(pStart),
+						Closes: toTimeSpec(pEnd),
 					},
 					VoterRegistration: &astris.TimeBounds{
-						Opens:  "2021-04-02T00:00:00", // 1617318000
-						Closes: "2021-04-02T23:59:59",
+						Opens:  toTimeSpec(vStart),
+						Closes: toTimeSpec(vEnd),
 					},
 					VoteCasting: &astris.TimeBounds{
-						Opens:  "2021-04-03T00:00:00", // 1617404400
-						Closes: "2021-04-03T23:59:59",
+						Opens:  toTimeSpec(cStart),
+						Closes: toTimeSpec(cEnd),
 					},
 					TallyDecryption: &astris.TimeBounds{
-						Opens:  "2021-04-04T00:00:00", // 1617490800
-						Closes: "2021-04-04T23:59:59",
+						Opens:  toTimeSpec(tStart),
+						Closes: toTimeSpec(tEnd),
 					},
 				},
 				Registrar: createRegistrar(system.System, dataDir),
@@ -356,7 +393,7 @@ func Register(rootCmd *cobra.Command) {
 			}
 
 			log.Info().Str("electionId", chain.ID().String()).Msg("Simulated Election Initialised")
-			var param1ts uint32 = 1617231601 // 2021-04-01T00:00:01+01:00
+			var param1ts uint32 = uint32(pStart.Unix()) + 1
 			// now do the parameter confirmation phase part 1
 			// for each Trustee encrypt the secret shares for the other trustees.
 
@@ -429,6 +466,9 @@ func Register(rootCmd *cobra.Command) {
 		},
 	}
 	simulateCmd.Flags().StringVar(&dataDir, "data-dir", ".", "The path to the directory to store data in")
+	simulateCmd.Flags().IntVar(&numTrustees, "num-trustee", 3, "Number of trustees")
+	simulateCmd.Flags().IntVar(&trusteesRequired, "threshold", 2, "Threshold of trustees")
+
 	authorityCmd.AddCommand(simulateCmd)
 }
 

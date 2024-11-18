@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -20,6 +19,9 @@ import (
 	"github.com/thechriswalker/go-astris/crypto/elgamal"
 	"github.com/thechriswalker/go-astris/crypto/random"
 )
+
+// this is used to make array types.
+const nCandidates = 10
 
 // Register the election setup command
 func Register(rootCmd *cobra.Command) {
@@ -61,8 +63,16 @@ func Register(rootCmd *cobra.Command) {
 			// allocate upfront
 			voters := make([]*Voter, nVoters)
 
-			var timestamp uint32 = 1617318001 // 2021-04-01T02:00:00
+			regAvg := &astris.Average{}
+			avgVoteCast := &astris.Average{}
 
+			// find the start time of the voter registration
+			genisisBlk, _ := chain.Payload(electionId)
+			var genisis astris.PayloadElectionSetup
+			json.Unmarshal(genisisBlk, &genisis)
+			regStart, _ := genisis.Timing.VoterRegistration.Opens.ToTime(genisis.Timing.Timezone)
+			castStart, _ := genisis.Timing.VoteCasting.Opens.ToTime(genisis.Timing.Timezone)
+			var timestamp uint32 = uint32(regStart.Unix())
 			// we need progress for the voting as it takes a LONG TIME.
 			// but more important probably is the ability to "RESUME".
 			// that means saving voter information. given the size we will store it in
@@ -78,13 +88,19 @@ func Register(rootCmd *cobra.Command) {
 			isRegistration := true
 			resumeFrom := 0
 
+			// setup of the election takes:
+			// - 1 block for the genesis
+			// - NumTrustees blocks for shares
+			// - NumTrustees blocks for trustee public
+			setupBlocks := 1 + 2*uint64(len(genisis.Trustees))
+
 			switch head.PayloadHint {
 			case uint8(astris.HintTrusteePublic): // we just finished the trustee bit, no registrations
 				isRegistration = true
 				resumeFrom = 0
 			case uint8(astris.HintVoterReg): // could be all registred or partial.
 				// assume the happy path. 11 blocks for setup, so depth-11 voters registered.
-				last := head.Depth - 11
+				last := head.Depth - setupBlocks
 				if last == uint64(nVoters) {
 					// all done.
 					isRegistration = false
@@ -96,8 +112,8 @@ func Register(rootCmd *cobra.Command) {
 					log.Info().Uint64("last", last).Msg("Resuming the registration phase")
 				}
 			case uint8(astris.HintBallot):
-				// assume the happy path. 11 blocks for setup, so depth-11 -nvoters registered.
-				last := head.Depth - 11 - uint64(nVoters)
+				// assume the happy path.
+				last := head.Depth - setupBlocks - uint64(nVoters)
 				if last == uint64(nVoters) {
 					// all done.
 					log.Info().Msg("All voter registration and casting is complete")
@@ -111,29 +127,19 @@ func Register(rootCmd *cobra.Command) {
 				panic("doesn't look like the correct part of the chain")
 			}
 
-			// we have ~ 86400 seconds to register our voters.
-			// so we need to do a number at a time before we increment
-			// this is the number of voters per second that we can allow
-			spread := int(math.Ceil(float64(nVoters) / 86350.0))
-			rand.Seed(time.Now().UnixNano())
-
 			if isRegistration {
 				// pass one.
 				log.Info().Int("count", nVoters).Msg("Performing Voter Registration")
 				bar := MaybeProgress(nVoters)
 				bar.Start()
-				sum := 0
 				for i := range voters {
-					if sum == spread {
-						timestamp++
-						sum = 0
-					}
-					sum++
+					timestamp++
 					if i < resumeFrom {
 						voters[i] = loadVoterFromFile(dataDir, i+1, system)
 						bar.Increment()
 						continue
 					}
+					s := time.Now()
 					// register a voter (and choose how they voted!)
 					v := &Voter{
 						ID: fmt.Sprintf("Voter[%d]", i+1),
@@ -152,6 +158,8 @@ func Register(rootCmd *cobra.Command) {
 
 					payload.RSignature = reg.Secret().CreateSignature(payload.RSigMessage())
 					payload.VSignature = v.KeyPair.Secret().CreateSignature(payload.VSigMessage())
+
+					regAvg.Add(time.Since(s))
 
 					// make the block!
 					blk, err := astris.NewBlockBase(astris.HintVoterReg, payload)
@@ -179,7 +187,7 @@ func Register(rootCmd *cobra.Command) {
 				bar.Finish()
 			}
 
-			timestamp = 1617404401 // start of vote casting
+			timestamp = uint32(castStart.Unix()) // start of vote casting
 
 			pk := validator.ElectionPublicKey()
 
@@ -187,8 +195,8 @@ func Register(rootCmd *cobra.Command) {
 			var cipherSum *elgamal.CipherText
 			randomnessSum := big.NewInt(0)
 
-			ciphers := make([]*elgamal.CipherText, 5)
-			proofs := make([]elgamal.ZKPOr, 5)
+			ciphers := make([]*elgamal.CipherText, nCandidates)
+			proofs := make([]elgamal.ZKPOr, nCandidates)
 
 			optionsCache := elgamal.NewPlaintextOptionsCache(system)
 			zeroOrOne := optionsCache.GetOptions(1)  // max 1 or 0 in a single vote
@@ -200,17 +208,13 @@ func Register(rootCmd *cobra.Command) {
 
 			// now do the actual voting
 			localTally := map[int]uint64{}
-			sum := 0
 			for i, voter := range voters {
-				if sum == spread {
-					timestamp++
-					sum = 0
-				}
-				sum++
+				timestamp++
 				if i < resumeFrom {
 					bar.Increment()
 					continue
 				}
+				s := time.Now()
 				// encrypt the voteswith the election public key
 				nv := 0                   // num votes cast
 				cipherSum = nil           // homomorphic ciphertext sum
@@ -241,6 +245,8 @@ func Register(rootCmd *cobra.Command) {
 				}
 				payload.Signature = voter.KeyPair.Secret().Sign(payload)
 
+				avgVoteCast.Add(time.Since(s))
+
 				// boom! now mint it!
 				// make the block!
 				blk, err := astris.NewBlockBase(astris.HintBallot, payload)
@@ -260,6 +266,8 @@ func Register(rootCmd *cobra.Command) {
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
 			enc.Encode(result)
+			log.Info().Int("avg_ms", regAvg.Milliseconds()).Msg("Average Voter Registration")
+			log.Info().Int("avg_ms", avgVoteCast.Milliseconds()).Msg("Average Vote Casting")
 		},
 	}
 
@@ -304,11 +312,11 @@ type Voter struct {
 	ID      string
 	Hash    string
 	KeyPair *elgamal.KeyPair
-	Ballot  [5]int
+	Ballot  [nCandidates]int
 }
 
-// our simulated election has 5 candidates.
-type Ballot [5]int
+// our simulated election has [nCandidates] candidates.
+type Ballot [nCandidates]int
 
 func makeVotes() (b Ballot) {
 	// number of votes to make is 0,1,2
@@ -333,7 +341,7 @@ func makeVotes() (b Ballot) {
 	choices := map[int]int{}
 	for v := 0; v < numVotes; v++ {
 		for {
-			c := rand.Intn(5)
+			c := rand.Intn(nCandidates)
 			if _, ok := choices[c]; !ok {
 				choices[c] = 1
 				break
@@ -364,7 +372,7 @@ func loadRegistrar(dir string, system *elgamal.System) *elgamal.KeyPair {
 func loadVoterFromFile(basedir string, idx int, system *elgamal.System) *Voter {
 	id := fmt.Sprintf("Voter[%d]", idx)
 	hash := sha256Hex(id)
-	filename := filepath.Join(basedir, hash[0:2], hash[2:4], hash+"-voter.json")
+	filename := filepath.Join(basedir, "voters", hash[0:2], hash[2:4], hash+"-voter.json")
 	buf, err := os.ReadFile(filename)
 	if err != nil {
 		panic(err)
@@ -380,7 +388,7 @@ func loadVoterFromFile(basedir string, idx int, system *elgamal.System) *Voter {
 }
 
 func writeVoterObjectToFile(basedir string, v *Voter) {
-	dir := filepath.Join(basedir, v.Hash[0:2], v.Hash[2:4])
+	dir := filepath.Join(basedir, "voters", v.Hash[0:2], v.Hash[2:4])
 	filename := filepath.Join(dir, v.Hash+"-voter.json")
 	// ignore errors, panic later
 	os.MkdirAll(dir, 0777)

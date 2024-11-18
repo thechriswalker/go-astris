@@ -35,6 +35,28 @@ type P2PNode interface {
 	// this is for publish block, but can be used internally (like for voting)
 	NewBlock(*blockchain.Block) (bool, error) // check new block, bool=true if block accepted, error means internal problem
 }
+
+// @TODO This needs speculative addition to the chain
+// i.e. the ability to accept multiple chains of different depths
+// How can we do this, it is super complicated.
+// Our validator needs to be in the context of a specific
+// chain-branch. Perhaps our blockchain.Chain interface implementation
+// have have an "in-memory fork", and then we can have a "commit"
+// function to add the speculative blocks later.
+//
+// We will need to keep checkpoints of current validation status (external to the chain)
+// where we will reference block-depth and block-id and validation status (i.e. cumulative state)
+// when we load a chain database, we will validate against our checkpoint DB to ensure
+// the chain is correct. We work back through the checkpoints to find the latest that matches the
+// actual data and work forwards from that one until either something fails or we reach the current
+// head (then we save a checkpoint).
+//
+// I am wondering about pushing most of the logic and validation state management into
+// the blockchain implementation. Along with a speculative `Fork() (Chain, error)`,
+// `Commit(state) error` and `Drop() error` functions to allow handling multiple possible chains
+// each peer will have a fork, and we will update the underlying Chains when we decide to commit
+// a block. That is on Commit() of a block, any chain with a different block at that point should be dropped
+// which may mean disconnecting from a peer sending bad blocks.
 type p2pNode struct {
 	options   *nodeOptions
 	chain     blockchain.Chain
@@ -57,6 +79,14 @@ func (n *p2pNode) Run(ctx context.Context) error {
 
 func (n *p2pNode) GetResult() *ElectionStats {
 	return n.validator.state.GetResult()
+}
+
+func (n *p2pNode) GetBenchmarks() *ElectionBenchmarks {
+	n.validator.state.GetResult()
+	return n.validator.state.benchmarks
+}
+func (n *p2pNode) GetTimings() map[string]int {
+	return n.validator.GetTimings()
 }
 
 type nodeOptions struct {
@@ -212,21 +242,27 @@ func (c canonicalJSON) HashCheck(v interface{}, expected []byte) bool {
 // trailing newline and follow the Go json.Encode rules.
 //
 // To create the canonical encoding:
-//  - all objects have the keys sorted
-//  - no extraneous whitespace (key spacing or indentation)
-//  - no extraneous unicode escaping is done, except that the values
-//    \u2028 (LINE SEPARATOR) and \u2029 (PARAGRAPH SEPARATOR) which
-//    although technically allowed, are always escaped.
-//  - big.Ints are encoded as base64url strings without padding
-//  - Add a final trailing newline (0x0a) byte after the final `}`
-//    (note that this is not after every object close)
-//  - if in doubt, see the golang json encoder
 //
-//  NB this is important as the hashes will not match if canonical representation
-//  if not used.
+//   - all objects have the keys sorted
 //
-//  @TODO publish some canonical data with some edge cases for comparision
-//        or create a typescript encoder that matches.
+//   - no extraneous whitespace (key spacing or indentation)
+//
+//   - no extraneous unicode escaping is done, except that the values
+//     \u2028 (LINE SEPARATOR) and \u2029 (PARAGRAPH SEPARATOR) which
+//     although technically allowed, are always escaped.
+//
+//   - big.Ints are encoded as base64url strings without padding
+//
+//   - Add a final trailing newline (0x0a) byte after the final `}`
+//     (note that this is not after every object close)
+//
+//   - if in doubt, see the golang json encoder
+//
+//     NB this is important as the hashes will not match if canonical representation
+//     if not used.
+//
+//     @TODO publish some canonical data with some edge cases for comparision
+//     or create a typescript encoder that matches.
 var CanonicalJSON = canonicalJSON{}
 
 // a helper for json error messages/status responses in HTTP

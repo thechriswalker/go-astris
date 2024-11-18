@@ -101,7 +101,7 @@ func getIdFromBytes(b []byte) (id astris.ID, err error) {
 	return id, nil
 }
 
-// FetchBlock gets a block directlty by hash
+// FetchBlock gets a block directly by hash
 func (s *Server) GetBlock(ctx context.Context, b *BlockID) (*FullBlock, error) {
 	if err := s.seenPeer(ctx); err != nil {
 		return nil, err

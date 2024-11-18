@@ -59,6 +59,8 @@ func Register(rootCmd *cobra.Command) {
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
 			enc.Encode(result)
+			enc.Encode(node.GetBenchmarks())
+			enc.Encode(node.GetTimings())
 		},
 	}
 

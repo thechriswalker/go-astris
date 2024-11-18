@@ -321,8 +321,9 @@ func openChain(db *SQLiteStorage, chainId BlockID, initialWorkLevel int, validat
 	bar := MaybeProgress(fullDepth)
 	bar.Start()
 	// if we get this far the chain of headers is valid and complete.
-	// now we need to reverse back up the chain validating payloads.
+	// now we need to reverse back up the chain validating payloads
 	blk := &Block{Header: &BlockHeader{}}
+
 	for {
 		// now go back UP the chain. First we validate this block.
 		blk.Header, err = db.Header(curr.blockId, blk.Header)

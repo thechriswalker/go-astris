@@ -1,8 +1,6 @@
 package elgamal
 
 import (
-	"fmt"
-
 	big "github.com/ncw/gmp"
 )
 
@@ -75,7 +73,7 @@ func lazyLookup(sys *System, max uint64) func(n *big.Int) uint64 {
 			counter++
 			last.Mul(last, sys.G)
 			last.Mod(last, sys.P)
-			fmt.Printf("DLog lookup: counter:%d value:%s\n", counter, last.String())
+			//	fmt.Printf("DLog lookup: counter:%d value:%s\n", counter, last.String())
 			k := key(last)
 			cache[k] = counter
 			if x.Cmp(last) == 0 {

@@ -30,7 +30,7 @@ func Register(rootCmd *cobra.Command) {
 		Short: "Partial Decrypt a tally for the simulation",
 		Run: func(cmd *cobra.Command, args []string) {
 			// add up, decrypt.
-			log.Info().Msg("Starting Voter Simulation")
+			log.Info().Msg("Starting Trustee Simulation")
 			var electionId astris.ID
 
 			err := electionId.FromString(electionIdStr)
@@ -41,12 +41,17 @@ func Register(rootCmd *cobra.Command) {
 			validator := astris.NewElectionValidator(electionId)
 			// speed this up for the simulation
 			validator.LooseMode = true
-			chain, err := blockchain.Open(dataDir, electionId, astris.AstrisWorkLevel, validator)
+			chain, _ := blockchain.Open(dataDir, electionId, astris.AstrisWorkLevel, validator)
 
 			// load all the trustee data.
 			trustees := loadTrustees(dataDir, validator)
 
-			var timestamp uint32 = 1617490801
+			// find the start time of the voter registration
+			genisisBlk, _ := chain.Payload(electionId)
+			var genisis astris.PayloadElectionSetup
+			json.Unmarshal(genisisBlk, &genisis)
+			tallyStart, _ := genisis.Timing.TallyDecryption.Opens.ToTime(genisis.Timing.Timezone)
+			var timestamp uint32 = uint32(tallyStart.Unix()) + 1
 
 			encTally := validator.GetLocalTally()
 			//fmt.Printf("%#v\n", encTally)
@@ -74,6 +79,12 @@ func Register(rootCmd *cobra.Command) {
 				}
 				timestamp += 30
 			}
+
+			result := validator.GetResult()
+			// output to stdout as JSON
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			enc.Encode(result)
 		},
 	}
 	trusteeCmd.PersistentFlags().StringVar(&electionIdStr, "election-id", "", "Election ID")

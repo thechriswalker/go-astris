@@ -15,6 +15,21 @@ import (
 
 var _ blockchain.BlockValidator = (*ElectionValidator)(nil)
 
+type timing struct {
+	start, end time.Time
+}
+
+func NewTiming() *timing {
+	return &timing{
+		start: time.Now(),
+		end:   time.Now(),
+	}
+}
+
+func (t *timing) Stop() {
+	t.end = time.Now()
+}
+
 // should have a "loose" mode for when I trust that the data is good
 // and just want to catch up to state.
 // In that mode we don't validate signatures or ZKPs
@@ -30,8 +45,16 @@ type ElectionValidator struct {
 	// worklevel for PoW
 	workLevel int
 
+	// used to record the time taken for various parts of the process
+	stats *ElectionStats
+
 	// state so far
 	state *ElectionState
+
+	// timings for phases.
+	timings map[int]struct {
+		Start, End time.Time
+	}
 
 	// if true, do less checks (faster, but not fully secure)
 	// I use it in the simulator to get state up to date when I have validated it previously
@@ -45,6 +68,10 @@ func NewElectionValidator(id ID) *ElectionValidator {
 	return &ElectionValidator{
 		electionID: id,
 		workLevel:  AstrisWorkLevel, // start with this
+		timings: map[int]struct {
+			Start time.Time
+			End   time.Time
+		}{},
 	}
 }
 
@@ -90,7 +117,7 @@ func (ev *ElectionValidator) Validate(blk *blockchain.Block) (err error) {
 		log.Debug().
 			Str("block", blk.Header.ID.String()).
 			Int("depth", int(blk.Header.Depth)).
-			Dur("ms", time.Now().Sub(start)).
+			Dur("ms", time.Since(start)).
 			Err(err).
 			Msg("Block Validation")
 	}()
@@ -118,7 +145,18 @@ func (ev *ElectionValidator) Validate(blk *blockchain.Block) (err error) {
 	}
 	// OK let's validate the next block by type.
 	// first we find the current phase.
-	switch ev.state.GetPhaseForTime(blk.Header.GetTime()) {
+	phaseForBlock := ev.state.GetPhaseForTime(blk.Header.GetTime())
+	if t, ok := ev.timings[phaseForBlock]; !ok {
+		t.Start = time.Now()
+		ev.timings[phaseForBlock] = t
+		if phaseForBlock > 1 {
+			p := ev.timings[phaseForBlock-1]
+			p.End = time.Now()
+			ev.timings[phaseForBlock-1] = p
+		}
+	}
+
+	switch phaseForBlock {
 	case 1: // parameter confirmation, if we have all the initial payloads, this can be the second round.
 		if !ev.state.HasAllTrusteeShares() {
 			err = ev.checkTrusteeShares(blk)
@@ -146,6 +184,28 @@ func (ev *ElectionValidator) Validate(blk *blockchain.Block) (err error) {
 		return
 	}
 
+}
+
+func (ev *ElectionValidator) GetTimings() map[string]int {
+	timings := map[string]int{}
+	for i := 1; i < 5; i++ {
+		x := ev.timings[i]
+		t := x.End.Sub(x.Start) / time.Millisecond
+		if x.End.IsZero() {
+			t = time.Now().Sub(x.Start) / time.Millisecond
+		}
+		switch i {
+		case 1:
+			timings["setup"] = int(t)
+		case 2:
+			timings["voter_reg"] = int(t)
+		case 3:
+			timings["vote_casting"] = int(t)
+		case 4:
+			timings["tally"] = int(t)
+		}
+	}
+	return timings
 }
 
 // share from index J to index I, i.e. $S_{ji}$
@@ -522,6 +582,7 @@ func (ev *ElectionValidator) checkVoteCast(blk *blockchain.Block) error {
 	}
 
 	if !ev.LooseMode {
+		defer ev.state.benchmarks.VoteValidation.Defer()()
 		// check signature first.
 		if err := pk.Verify(cv, cv.Signature); err != nil {
 			return fmt.Errorf("Voter Signature on CastVote is invalid: %w", err)
@@ -606,6 +667,9 @@ func (ev *ElectionValidator) checkPartialTally(blk *blockchain.Block) error {
 			return fmt.Errorf("Given Partial Tally does not match our local Tally")
 		}
 	}
+
+	// this is the validation bit
+	defer ev.state.benchmarks.PartialDecryption.Defer()()
 
 	// now the signature
 	if err := trustee.SigKey.Verify(pt, pt.Signature); err != nil {

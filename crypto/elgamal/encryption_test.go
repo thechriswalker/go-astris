@@ -5,7 +5,7 @@ import (
 
 	big "github.com/ncw/gmp"
 
-	"../random"
+	"github.com/thechriswalker/go-astris/crypto/random"
 )
 
 func TestEncryption(t *testing.T) {

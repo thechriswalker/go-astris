@@ -1,6 +1,7 @@
 package astris
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -60,6 +61,8 @@ type ElectionState struct {
 	// is the partials for the candidates.
 	resultPartials map[int]*PayloadPartialTally
 	finalTallys    []Tally
+
+	benchmarks *ElectionBenchmarks
 }
 
 func newElectionState(data *PayloadElectionSetup) *ElectionState {
@@ -71,6 +74,7 @@ func newElectionState(data *PayloadElectionSetup) *ElectionState {
 		voters:        make(map[string]*VoterState, 2048), //who knows how big this will be
 		//localTallies:   make([]*elgamal.CipherText, len(data.Candidates)),
 		resultPartials: make(map[int]*PayloadPartialTally, len(data.Trustees)),
+		benchmarks:     NewBenchmarks(),
 	}
 }
 
@@ -188,6 +192,58 @@ type ElectionStats struct {
 	Results          []Tally // the final result
 }
 
+type Average struct {
+	Time  time.Duration
+	Count int
+}
+
+func (a *Average) MarshalJSON() (b []byte, err error) {
+	ms := int(a.Time / time.Millisecond)
+	return json.Marshal(map[string]any{
+		"TotalTimeMS": ms,
+		"Count":       a.Count,
+		"Average":     ms / a.Count,
+	})
+}
+
+func (a *Average) Add(d time.Duration) {
+	a.Time += d
+	a.Count++
+}
+func (a *Average) Measure(fn func()) {
+	s := time.Now()
+	fn()
+	a.Time += time.Since(s)
+	a.Count++
+}
+
+func (a *Average) Defer() func() {
+	s := time.Now()
+	return func() {
+		a.Time += time.Since(s)
+		a.Count++
+	}
+}
+
+func (a *Average) Milliseconds() int {
+	return int((a.Time / time.Duration(a.Count)) / time.Millisecond)
+}
+
+type ElectionBenchmarks struct {
+	// operations on validation that we can average.
+	ThresholdDecryption *Average
+	PartialDecryption   *Average
+	VoteValidation      *Average
+}
+
+func NewBenchmarks() *ElectionBenchmarks {
+	return &ElectionBenchmarks{
+		ThresholdDecryption: &Average{},
+		PartialDecryption:   &Average{},
+		VoteValidation:      &Average{},
+	}
+}
+
 type Tally struct {
 	Candidate string
 	Count     uint64
@@ -254,13 +310,14 @@ func (es *ElectionState) combineTallies(maxVotes uint64) []Tally {
 			}
 		}
 		//fmt.Printf("candidate[%d] using trustees: %#v\nFor partials: %#v\n", ci+1, indices, partials)
-
-		exponentials[ci] = elgamal.ThresholdDecrypt(
-			es.immutableSetupData.Params,
-			ct,
-			partials,
-			indices,
-		)
+		es.benchmarks.ThresholdDecryption.Measure(func() {
+			exponentials[ci] = elgamal.ThresholdDecrypt(
+				es.immutableSetupData.Params,
+				ct,
+				partials,
+				indices,
+			)
+		})
 
 	}
 

@@ -40,6 +40,7 @@ func main() {
 	zerolog.TimeFieldFormat = timeFormatMs
 	log.Logger = log.Output(zerolog.NewConsoleWriter(func(cw *zerolog.ConsoleWriter) {
 		cw.TimeFormat = timeFormatLocal
+		cw.NoColor = true
 	}))
 
 	// initialise the cobra framework for the command.
